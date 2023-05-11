@@ -1,5 +1,6 @@
 package os.failsafe.executor;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
@@ -10,26 +11,31 @@ public class Task {
     private final String nodeId;
     private final LocalDateTime creationTime;
     private final LocalDateTime plannedExecutionTime;
+    private final Duration timeout;
     private final LocalDateTime lockTime;
     private final ExecutionFailure executionFailure;
     private final int retryCount;
     private final Long version;
 
     public Task(String id, String name, String parameter, LocalDateTime plannedExecutionTime) {
-        this(id, name, parameter, null, null, plannedExecutionTime, null, null, 0, 0L);
+        this(id, name, parameter, null, null, plannedExecutionTime, null, null, null, 0, 0L);
+    }
+    public Task(String id, String name, String parameter, LocalDateTime plannedExecutionTime, Duration timeout) {
+        this(id, name, parameter, null, null, plannedExecutionTime, timeout, null, null, 0, 0L);
     }
 
-    public Task(String id, String name, String parameter, LocalDateTime creationTime, LocalDateTime plannedExecutionTime, LocalDateTime lockTime, ExecutionFailure executionFailure, int retryCount, Long version) {
-        this(id, name, parameter, null, creationTime, plannedExecutionTime, lockTime, executionFailure, retryCount, version);
+    public Task(String id, String name, String parameter, LocalDateTime creationTime, LocalDateTime plannedExecutionTime, Duration timeout, LocalDateTime lockTime, ExecutionFailure executionFailure, int retryCount, Long version) {
+        this(id, name, parameter, null, creationTime, plannedExecutionTime, timeout, lockTime, executionFailure, retryCount, version);
     }
 
-    public Task(String id, String name, String parameter, String nodeId, LocalDateTime creationTime, LocalDateTime plannedExecutionTime, LocalDateTime lockTime, ExecutionFailure executionFailure, int retryCount, Long version) {
+    public Task(String id, String name, String parameter, String nodeId, LocalDateTime creationTime, LocalDateTime plannedExecutionTime, Duration timeout, LocalDateTime lockTime, ExecutionFailure executionFailure, int retryCount, Long version) {
         this.id = id;
         this.parameter = parameter;
         this.name = name;
         this.nodeId = nodeId;
         this.creationTime = creationTime;
         this.plannedExecutionTime = plannedExecutionTime;
+        this.timeout = timeout;
         this.lockTime = lockTime;
         this.executionFailure = executionFailure;
         this.retryCount = retryCount;
@@ -58,6 +64,8 @@ public class Task {
     public LocalDateTime getPlannedExecutionTime() {
         return plannedExecutionTime;
     }
+
+    public Duration getTimeout() { return timeout; }
 
     public LocalDateTime getLockTime() {
         return lockTime;

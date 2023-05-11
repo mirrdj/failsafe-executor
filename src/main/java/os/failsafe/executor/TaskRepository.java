@@ -12,6 +12,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -45,23 +46,23 @@ class TaskRepository {
 
         this.insertStmtMysqlOrMariaDb = String.format(//language=SQL
                 "INSERT IGNORE INTO %s" +
-                        " (ID, NAME, PARAMETER, PLANNED_EXECUTION_TIME, CREATED_DATE, NODE_ID, LOCK_TIME, FAIL_TIME, EXCEPTION_MESSAGE, STACK_TRACE, RETRY_COUNT, VERSION)" +
+                        " (ID, NAME, PARAMETER, PLANNED_EXECUTION_TIME, CREATED_DATE, TIMEOUT, NODE_ID, LOCK_TIME, FAIL_TIME, EXCEPTION_MESSAGE, STACK_TRACE, RETRY_COUNT, VERSION)" +
                         " VALUES" +
-                        " (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        " (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 tableName);
 
         this.insertStmtPostgres = String.format(//language=SQL
                 "INSERT INTO %s" +
-                        " (ID, NAME, PARAMETER, PLANNED_EXECUTION_TIME, CREATED_DATE, NODE_ID, LOCK_TIME, FAIL_TIME, EXCEPTION_MESSAGE, STACK_TRACE, RETRY_COUNT, VERSION)" +
+                        " (ID, NAME, PARAMETER, PLANNED_EXECUTION_TIME, CREATED_DATE, TIMEOUT, NODE_ID, LOCK_TIME, FAIL_TIME, EXCEPTION_MESSAGE, STACK_TRACE, RETRY_COUNT, VERSION)" +
                         " VALUES" +
-                        " (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)" +
+                        " (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)" +
                         " ON CONFLICT DO NOTHING",
                 tableName);
 
         this.insertStmtOracle = String.format(//language=SQL
                 "INSERT INTO %s" +
-                        " (ID, NAME, PARAMETER, PLANNED_EXECUTION_TIME, CREATED_DATE, NODE_ID, LOCK_TIME, FAIL_TIME, EXCEPTION_MESSAGE, STACK_TRACE, RETRY_COUNT, VERSION)" +
-                        " SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? FROM DUAL" +
+                        " (ID, NAME, PARAMETER, PLANNED_EXECUTION_TIME, CREATED_DATE, TIMEOUT, NODE_ID, LOCK_TIME, FAIL_TIME,  EXCEPTION_MESSAGE, STACK_TRACE, RETRY_COUNT, VERSION)" +
+                        " SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? FROM DUAL" +
                         " WHERE NOT EXISTS" +
                         " (SELECT ID FROM %s WHERE ID = ?)",
                 tableName, tableName);
@@ -142,12 +143,15 @@ class TaskRepository {
 
     private int addTaskInMysqlOrMariaDb(Connection connection, Task task, LocalDateTime creationTime) {
         ExecutionFailure executionFailure = task.getExecutionFailure();
+        Duration timeout = task.getTimeout();
+
         return database.insert(connection, insertStmtMysqlOrMariaDb,
                 task.getId(),
                 task.getName(),
                 task.getParameter(),
                 Timestamp.valueOf(task.getPlannedExecutionTime()),
                 Timestamp.valueOf(creationTime),
+                timeout != null ? timeout.toMinutes() : null,
                 null,
                 null,
                 executionFailure != null ? Timestamp.valueOf(executionFailure.getFailTime()) : null,
@@ -159,12 +163,15 @@ class TaskRepository {
 
     private int addTaskInPostgres(Connection connection, Task task, LocalDateTime creationTime) {
         ExecutionFailure executionFailure = task.getExecutionFailure();
+        Duration timeout = task.getTimeout();
+
         return database.insert(connection, insertStmtPostgres,
                 task.getId(),
                 task.getName(),
                 task.getParameter(),
                 Timestamp.valueOf(task.getPlannedExecutionTime()),
                 Timestamp.valueOf(creationTime),
+                timeout != null ? timeout.toMinutes() : null,
                 null,
                 null,
                 executionFailure != null ? Timestamp.valueOf(executionFailure.getFailTime()) : null,
@@ -176,12 +183,15 @@ class TaskRepository {
 
     private int addTaskInOracle(Connection connection, Task task, LocalDateTime creationTime) {
         ExecutionFailure executionFailure = task.getExecutionFailure();
+        Duration timeout = task.getTimeout();
+
         return database.insert(connection, insertStmtOracle,
                 task.getId(),
                 task.getName(),
                 task.getParameter(),
                 Timestamp.valueOf(task.getPlannedExecutionTime()),
                 Timestamp.valueOf(creationTime),
+                timeout != null ? timeout.toMinutes() : null,
                 null,
                 null,
                 executionFailure != null ? Timestamp.valueOf(executionFailure.getFailTime()) : null,
@@ -256,7 +266,7 @@ class TaskRepository {
             }
             if (executionResult == 1) {
                 Task task = toLock.get(i);
-                result.add(new Task(task.getId(), task.getName(), task.getParameter(), nodeId, task.getCreationTime(), task.getPlannedExecutionTime(), lockTime, null, task.getRetryCount(), task.getVersion() + 1));
+                result.add(new Task(task.getId(), task.getName(), task.getParameter(), nodeId, task.getCreationTime(), task.getPlannedExecutionTime(), task.getTimeout(), lockTime, null, task.getRetryCount(), task.getVersion() + 1));
           }
         }
         return result;
@@ -350,7 +360,7 @@ class TaskRepository {
             }
             if (executionResult == 1) {
                 Task task = toUpdate.get(i);
-                result.add(new Task(task.getId(), task.getName(), task.getParameter(), task.getNodeId(), task.getCreationTime(), task.getPlannedExecutionTime(), lockTime, null, task.getRetryCount(), task.getVersion()));
+                result.add(new Task(task.getId(), task.getName(), task.getParameter(), task.getNodeId(), task.getCreationTime(), task.getPlannedExecutionTime(), task.getTimeout(), lockTime, null, task.getRetryCount(), task.getVersion()));
             }
         }
         return result;
@@ -365,6 +375,7 @@ class TaskRepository {
                 rs.getString("NODE_ID"),
                 rs.getTimestamp("CREATED_DATE").toLocalDateTime(),
                 rs.getTimestamp("PLANNED_EXECUTION_TIME").toLocalDateTime(),
+                Duration.ofMinutes(rs.getInt("TIMEOUT")), // TODO: check time unit
                 lockTime != null ? lockTime.toLocalDateTime() : null,
                 mapToExecutionFailure(rs),
                 rs.getInt("RETRY_COUNT"),

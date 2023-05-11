@@ -212,7 +212,21 @@ public class FailsafeExecutor {
      * @return taskId
      */
     public String execute(String taskName, String parameter) {
-        return execute(UUID.randomUUID().toString(), taskName, parameter);
+        return execute(taskName, parameter, (Duration) null);
+    }
+
+    /**
+     * Persists a task in the database and executes the function assigned to the taskName at some time in the future.
+     *
+     * <p>A random taskId is assigned to this task. Thus a new task is definitely persisted in the database.</p>
+     *
+     * @param taskName  the name of the task that should be executed
+     * @param parameter the parameter that should be passed to the function
+     * @param timeout   the amount of time after which the task execution is canceled and the task is marked as failed
+     * @return taskId
+     */
+    public String execute(String taskName, String parameter, Duration timeout) {
+        return execute(UUID.randomUUID().toString(), taskName, parameter, timeout);
     }
 
     /**
@@ -229,7 +243,25 @@ public class FailsafeExecutor {
      * @return taskId
      */
     public String execute(Connection connection, String taskName, String parameter) {
-        return execute(connection, UUID.randomUUID().toString(), taskName, parameter);
+        return execute(connection, taskName, parameter, (Duration) null);
+    }
+
+    /**
+     * Persists a task in the database and executes the function assigned to the taskName at some time in the future.
+     *
+     * <p>A random taskId is assigned to this task. Thus a new task is definitely persisted in the database.</p>
+     *
+     * <p>The provided connection is used for persisting the task in the database. Neither commit
+     * nor rollback is triggered. The control of the transactional behavior is completely up to the caller.</p>
+     *
+     * @param connection the JDBC connection used to persist the task in the database
+     * @param taskName   the name of the task that should be executed
+     * @param parameter  the parameter that should be passed to the function
+     * @param timeout    the amount of time after which the task execution is canceled and the task is marked as failed
+     * @return taskId
+     */
+    public String execute(Connection connection, String taskName, String parameter, Duration timeout) {
+        return execute(connection, UUID.randomUUID().toString(), taskName, parameter, timeout);
     }
 
     /**
@@ -244,7 +276,23 @@ public class FailsafeExecutor {
      * @return taskId or null if a task with the given taskId already exists
      */
     public String execute(String taskId, String taskName, String parameter) {
-        return database.connect(connection -> execute(connection, taskId, taskName, parameter));
+        return execute(taskId, taskName, parameter, (Duration) null);
+    }
+
+    /**
+     * Persists a task in the database and executes the function assigned to the taskName at some time in the future.
+     *
+     * <p>The taskId is used as unique constraint of this task. On conflict (task with this id already exists in database) insertion is simply skipped.
+     * In this case no exception will be thrown. Method returns gracefully.</p>
+     *
+     * @param taskId    the id of the task used as unique constraint in database
+     * @param taskName  the name of the task that should be executed
+     * @param parameter the parameter that should be passed to the function
+     * @param timeout   the amount of time after which the task execution is canceled and the task is marked as failed
+     * @return taskId or null if a task with the given taskId already exists
+     */
+    public String execute(String taskId, String taskName, String parameter, Duration timeout) {
+        return database.connect(connection -> execute(connection, taskId, taskName, parameter, timeout));
     }
 
     /**
@@ -263,6 +311,26 @@ public class FailsafeExecutor {
      * @return taskId or null if a task with the given taskId already exists
      */
     public String execute(Connection connection, String taskId, String taskName, String parameter) {
+        return execute(connection, taskId, taskName, parameter, (Duration) null);
+    }
+
+    /**
+     * Persists a task in the database and executes the function assigned to the taskName at some time in the future.
+     *
+     * <p>The taskId is used as unique constraint of this task. On conflict (task with this id already exists in database) insertion is simply skipped.
+     * In this case no exception will be thrown. Method returns gracefully.</p>
+     *
+     * <p>The provided connection is used for persisting the task in the database. Neither commit
+     * nor rollback is triggered. The control of the transactional behavior is completely up to the caller.</p>
+     *
+     * @param connection the JDBC connection used to persist the task in the database
+     * @param taskId     the id of the task used as unique constraint in database
+     * @param taskName   the name of the task that should be executed
+     * @param parameter  the parameter that should be passed to the function
+     * @param timeout    the amount of time after which the task execution is canceled and the task is marked as failed
+     * @return taskId or null if a task with the given taskId already exists
+     */
+    public String execute(Connection connection, String taskId, String taskName, String parameter, Duration timeout) {
         TaskRegistration taskRegistration = taskRegistrationsByName.get(taskName);
         if (taskRegistration == null) {
             throwTaskNotRegisteredException(taskName);
@@ -275,7 +343,7 @@ public class FailsafeExecutor {
                     .orElseThrow(() -> new IllegalArgumentException(String.format("Schedule of task '%s' did not return an execution time for input '%s", taskName, now)));
         }
 
-        Task taskInstance = new Task(taskId, taskName, parameter, plannedExecutionTime);
+        Task taskInstance = new Task(taskId, taskName, parameter, plannedExecutionTime, timeout);
         return enqueue(connection, taskInstance);
     }
 
@@ -290,7 +358,22 @@ public class FailsafeExecutor {
      * @return taskId
      */
     public String defer(String taskName, String parameter, LocalDateTime plannedExecutionTime) {
-        return defer(UUID.randomUUID().toString(), taskName, parameter, plannedExecutionTime);
+        return defer(taskName, parameter, plannedExecutionTime, (Duration) null);
+    }
+
+    /**
+     * Persists a task in the database and defers execution of the function assigned to the taskName to the provided planned execution time.
+     *
+     * <p>A random taskId is assigned to this task. Thus a new task is definitely persisted in the database.</p>
+     *
+     * @param taskName             the name of the task that should be executed
+     * @param parameter            the parameter that should be passed to the function
+     * @param plannedExecutionTime the time when the task should be executed
+     * @param timeout              the amount of time after which the task execution is canceled and the task is marked as failed
+     * @return taskId
+     */
+    public String defer(String taskName, String parameter, LocalDateTime plannedExecutionTime, Duration timeout) {
+        return defer(UUID.randomUUID().toString(), taskName, parameter, plannedExecutionTime, timeout);
     }
 
     /**
@@ -306,7 +389,24 @@ public class FailsafeExecutor {
      * @return taskId or null if a task with the given taskId already exists
      */
     public String defer(String taskId, String taskName, String parameter, LocalDateTime plannedExecutionTime) {
-        return database.connect(connection -> defer(connection, taskId, taskName, parameter, plannedExecutionTime));
+        return defer(taskId, taskName, parameter, plannedExecutionTime, (Duration) null);
+    }
+
+    /**
+     * Persists a task in the database and defers execution of the function assigned to the taskName to the provided planned execution time.
+     *
+     * <p>The taskId is used as unique constraint of this task. On conflict (task with this id already exists in database) insertion is simply skipped.
+     * In this case no exception will be thrown. Method returns gracefully.</p>
+     *
+     * @param taskId               the id of the task used as unique constraint in database
+     * @param taskName             the name of the task that should be executed
+     * @param parameter            the parameter that should be passed to the function
+     * @param plannedExecutionTime the time when the task should be executed
+     * @param timeout              the amount of time after which the task execution is canceled and the task is marked as failed
+     * @return taskId or null if a task with the given taskId already exists
+     */
+    public String defer(String taskId, String taskName, String parameter, LocalDateTime plannedExecutionTime, Duration timeout) {
+        return database.connect(connection -> defer(connection, taskId, taskName, parameter, plannedExecutionTime, timeout));
     }
 
     /**
@@ -326,7 +426,28 @@ public class FailsafeExecutor {
      * @return taskId or null if a task with the given taskId already exists
      */
     public String defer(Connection connection, String taskId, String taskName, String parameter, LocalDateTime plannedExecutionTime) {
-        Task taskInstance = new Task(taskId, taskName, parameter, plannedExecutionTime);
+        return defer(connection, taskId, taskName, parameter, plannedExecutionTime, (Duration) null);
+    }
+
+    /**
+     * Persists a task in the database and defers execution of the function assigned to the taskName to the provided planned execution time.
+     *
+     * <p>The taskId is used as unique constraint of this task. On conflict (task with this id already exists in database) insertion is simply skipped.
+     * In this case no exception will be thrown. Method returns gracefully.</p>
+     *
+     * <p>The provided connection is used for persisting the task in the database. Neither commit
+     * nor rollback is triggered. The control of the transactional behavior is completely up to the caller.</p>
+     *
+     * @param connection           the JDBC connection used to persist the task in the database
+     * @param taskId               the id of the task used as unique constraint in database
+     * @param taskName             the name of the task that should be executed
+     * @param parameter            the parameter that should be passed to the function
+     * @param plannedExecutionTime the time when the task should be executed
+     * @param timeout              the amount of time after which the task execution is canceled and the task is marked as failed
+     * @return taskId or null if a task with the given taskId already exists
+     */
+    public String defer(Connection connection, String taskId, String taskName, String parameter, LocalDateTime plannedExecutionTime, Duration timeout) {
+        Task taskInstance = new Task(taskId, taskName, parameter, plannedExecutionTime, timeout);
         return enqueue(connection, taskInstance);
     }
 
@@ -421,7 +542,7 @@ public class FailsafeExecutor {
      */
     public String recordFailure(Connection connection, String taskId, String taskName, String parameter, Exception exception) {
         LocalDateTime now = systemClock.now();
-        Task toSave = new Task(taskId, taskName, parameter, now, now, null, new ExecutionFailure(now, exception), 0, 0L);
+        Task toSave = new Task(taskId, taskName, parameter, now, now, null, null, new ExecutionFailure(now, exception), 0, 0L); // TODO look into this
         return taskRepository.add(connection, toSave);
     }
 
